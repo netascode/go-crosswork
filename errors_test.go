@@ -14,7 +14,7 @@ func TestAPIErrorError(t *testing.T) {
 	err := &APIError{StatusCode: 404, Message: "uri keypath not found"}
 	assert.Equal(t, "HTTP Request failed: StatusCode 404: uri keypath not found", err.Error())
 	assert.Equal(t, "HTTP Request failed: StatusCode 500", (&APIError{StatusCode: 500}).Error())
-	// providers that match on the error text keep working
+	// callers that match on the error text keep working
 	assert.Contains(t, err.Error(), "StatusCode 404")
 }
 

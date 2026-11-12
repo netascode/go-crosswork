@@ -56,7 +56,7 @@ func TestResultFailure(t *testing.T) {
 		"dg_mapping_job_completed.json",
 		"dg_mapping_job_warning.json", // a device added admin up without a gateway: completed, moved down
 		"dg_pool_created.json",
-		"dlm_job_running.json", // not terminal, but not an error: the provider may poll
+		"dlm_job_running.json", // not terminal, but not an error: the caller may poll
 		"collection_accepted.json",
 		"operstatesummary.json", // "error" is a count
 		"nodes_query_with_errors.json",
@@ -67,7 +67,7 @@ func TestResultFailure(t *testing.T) {
 		"code_message_ok.json",
 		"scalar_zero.json",
 		"list_body.json",
-		"devicepackage_not_found.json", // soft not-found with no error member: provider's job
+		"devicepackage_not_found.json", // soft not-found with no error member: left to the caller
 		"yang_patch_status_ok.json",
 		"grouping_success.json", // status marker is Success
 	}
@@ -117,7 +117,7 @@ func TestClientDo_FailureInside200(t *testing.T) {
 	assert.Contains(t, ae.Message, "already exists")
 	assert.Contains(t, err.Error(), "StatusCode 200")
 	assert.Equal(t, "JOB_FAILED", res.Get("state").String(), "Res still holds the parsed body next to the error")
-	assert.False(t, IsConflict(err), "the library never reads prose: the provider reads first")
+	assert.False(t, IsConflict(err), "the library never reads prose: the caller reads first")
 	assert.Equal(t, 1, f.callCount("/crosswork/inventory/v1/credentials"), "a failed write is not retried")
 }
 

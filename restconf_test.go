@@ -138,7 +138,7 @@ func TestClientNSORetry_OffByDefault(t *testing.T) {
 }
 
 func TestClientNSORetry_IgnoresMessageTextAndOtherPaths(t *testing.T) {
-	// the same words as go-restconf's rule, but a different error-tag: not retried
+	// lock wording in the message, but a different error-tag: not retried
 	f, _ := nsoFake(t, fixture(t, "nso_text_only_lock.json"), 1, 0)
 	c := f.client(t, NSORetry(5))
 	_, err := c.Put(nsoData+"/x", `{}`)

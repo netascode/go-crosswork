@@ -48,7 +48,6 @@ func TestClientOptions(t *testing.T) {
 	assert.Equal(t, "https://x/app-dashboard", c.JWTService)
 }
 
-// The fake server uses a self-signed certificate, like many real Crosswork deployments.
 func TestClientInsecure_DefaultAndSwitch(t *testing.T) {
 	f := newFake(t)
 
@@ -84,22 +83,22 @@ func userAgents(f *fakeCW, prefix string) []string {
 
 func TestClientUserAgent_Login(t *testing.T) {
 	f := newFake(t)
-	c := f.client(t, UserAgent("CrossworkTerraform/9.9"))
+	c := f.client(t, UserAgent("CrossworkClient/9.9"))
 	_, err := c.Get(apiPath)
 	require.NoError(t, err)
 	got := userAgents(f, "/crosswork/sso/")
 	assert.Len(t, got, 2, "the ticket call and the JWT call")
 	for _, ua := range got {
-		assert.Equal(t, "CrossworkTerraform/9.9", ua)
+		assert.Equal(t, "CrossworkClient/9.9", ua)
 	}
 }
 
 func TestClientUserAgent_API(t *testing.T) {
 	f := newFake(t)
-	c := f.client(t, UserAgent("CrossworkTerraform/9.9"))
+	c := f.client(t, UserAgent("CrossworkClient/9.9"))
 	_, err := c.Get(apiPath)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"CrossworkTerraform/9.9"}, userAgents(f, apiPath))
+	assert.Equal(t, []string{"CrossworkClient/9.9"}, userAgents(f, apiPath))
 }
 
 func TestClientJWTService_DefaultIsAccepted(t *testing.T) {

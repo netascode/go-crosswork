@@ -8,8 +8,7 @@ import (
 	"gopkg.in/h2non/gock.v1"
 )
 
-// The sibling libraries mock HTTP with gock; this keeps that style for one end-to-end case.
-// (gock replaces the client's Transport, so Insecure must not be applied after interception.)
+// gock replaces the client's Transport, so Insecure must not be applied after interception.
 func TestClientDeleteBody_Gock(t *testing.T) {
 	defer gock.Off()
 	const host = "https://cnc.example.com:30603"

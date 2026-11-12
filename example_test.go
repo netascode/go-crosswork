@@ -6,7 +6,7 @@ import (
 	"github.com/netascode/go-crosswork"
 )
 
-// These examples mirror the README. They have no Output comment, so they are compiled but not run.
+// These examples have no Output comment, so they are compiled but not run.
 
 func ExampleNewClient() {
 	client, _ := crosswork.NewClient("https://1.1.1.1:30603", "user", "pwd")

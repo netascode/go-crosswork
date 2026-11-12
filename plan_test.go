@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The bodies in testdata/nso_*.json are NSO answers for the ODN template service (TSDN function pack 7.2.1).
+// The bodies in testdata/nso_*.json are NSO answers for the ODN template service.
 const (
 	odnPath  = nsoData + "/cisco-sr-te-cfp:sr-te/cisco-sr-te-cfp-sr-odn:odn/odn-template=x"
 	odnPlan  = nsoData + "/cisco-sr-te-cfp:sr-te/cisco-sr-te-cfp-sr-odn:odn/odn-template-plan=x"
@@ -180,7 +180,7 @@ func TestParsePlan_Shapes(t *testing.T) {
 	}
 }
 
-// The error values of NSO's answers to a write, which the provider has to tell apart.
+// The error values of NSO's answers to a write, which a caller has to tell apart.
 func TestNSOWriteErrors(t *testing.T) {
 	cases := []struct {
 		file     string
