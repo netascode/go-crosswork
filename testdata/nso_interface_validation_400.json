@@ -1,0 +1,12 @@
+{
+  "ietf-restconf:errors": {
+    "error": [
+      {
+        "error-type": "application",
+        "error-tag": "malformed-message",
+        "error-path": "/ietf-l2vpn-ntw:l2vpn-ntw/vpn-services/vpn-service[vpn-id='cwtest-l2']",
+        "error-message": "/flat-L2vpn-internal-local-site-service{L2NM-cwtest-l2-internal PE-1}: STATUS_CODE: TSDN-L2VPN-412\nREASON: Device interface not present on device\nCATEGORY: validation\nSEVERITY: ERROR\nContext [name = Interface Validation, message = Provided interface not present on local-site\n state = {'Service': 'L2NM-cwtest-l2-internal', 'Interface': 'HundredGigE0/0/0/99', 'Device': 'PE-1'}]\n"
+      }
+    ]
+  }
+}

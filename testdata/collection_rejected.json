@@ -1,0 +1,10 @@
+{
+ "collection_control_status_list": [],
+ "query_options": null,
+ "result": {
+  "request_result": "REJECTED",
+  "error": {
+   "error": "filter must not be empty"
+  }
+ }
+}

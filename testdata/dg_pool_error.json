@@ -1,0 +1,1 @@
+{"error":"The number of data gateway instance(s) {2} added to the pool does not match the number of virtual IPs {1} + number of standby data gateways {0} specified. Remove some data gateway instances from the pool, and/or add more IPs and/or adjust the specified number of standby data gateways."}

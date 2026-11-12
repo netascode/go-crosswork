@@ -1,0 +1,7 @@
+{
+ "statuscountmap": {
+  "InProgress": 0,
+  "OnboardingError": 0,
+  "ProvisioningError": 0
+ }
+}

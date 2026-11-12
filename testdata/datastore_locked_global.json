@@ -1,0 +1,12 @@
+{
+ "ietf-netconf-monitoring:datastore": [
+  {
+   "name": "running",
+   "locks": {
+    "global-lock": {
+     "locked-by-session": 42
+    }
+   }
+  }
+ ]
+}

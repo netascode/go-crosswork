@@ -1,0 +1,11 @@
+{
+ "job_id": "00000000-0000-0000-0000-000000000001",
+ "creation_time": "1793312487",
+ "created_by": "admin",
+ "impacted": [
+  "example"
+ ],
+ "state": "JOB_FAILED",
+ "type": "1 device(s) details updation failed ",
+ "error": "[ErrNodeWithUuidDoesNotExist]:  The Device  does not exist."
+}

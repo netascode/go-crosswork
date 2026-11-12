@@ -1,0 +1,12 @@
+{
+  "ietf-restconf:errors": {
+    "error": [
+      {
+        "error-type": "application",
+        "error-tag": "malformed-message",
+        "error-path": "/cisco-sr-te-cfp:sr-te/cisco-sr-te-cfp-sr-odn:odn/odn-template[name='cwtest-odn']",
+        "error-message": "Operation failed because:  Service still in zombie state : '/cisco-sr-te-cfp:sr-te/cisco-sr-te-cfp-sr-odn:odn/odn-template[name='cwtest-odn']'"
+      }
+    ]
+  }
+}

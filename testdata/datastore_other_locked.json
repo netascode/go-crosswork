@@ -1,0 +1,17 @@
+{
+ "ietf-netconf-monitoring:datastore": [
+  {
+   "name": "candidate",
+   "locks": {
+    "partial-lock": [
+     {
+      "lock-id": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "running"
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "data": [
+  {
+   "inventory_id": "router-1",
+   "errors": [
+    "Major - Fetch ssh keys failed. NSO Replication in progress"
+   ]
+  }
+ ],
+ "total_count": 1
+}

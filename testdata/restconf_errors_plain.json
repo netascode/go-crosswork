@@ -1,0 +1,10 @@
+{
+ "errors": {
+  "error": [
+   {
+    "error-tag": "missing-attribute",
+    "error-message": "Entry '(urn:ietf:params:xml:ns:yang:ietf-l2vpn-ntw?revision=2022-01-01)vpn-id' is missing"
+   }
+  ]
+ }
+}

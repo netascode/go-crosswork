@@ -1,0 +1,15 @@
+{
+ "ietf-netconf-monitoring:datastore": [
+  {
+   "name": "running",
+   "locks": {
+    "partial-lock": [
+     {
+      "lock-id": 5
+     }
+    ]
+   },
+   "tailf-netconf-monitoring:status": "valid"
+  }
+ ]
+}

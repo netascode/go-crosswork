@@ -1,0 +1,9 @@
+{
+ "ietf-netconf-monitoring:datastore": [
+  {
+   "name": "running",
+   "tailf-netconf-monitoring:transaction-id": "1793-298797-334725",
+   "tailf-netconf-monitoring:status": "valid"
+  }
+ ]
+}

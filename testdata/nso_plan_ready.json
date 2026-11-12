@@ -1,0 +1,77 @@
+{
+  "cisco-sr-te-cfp-sr-odn:odn-template-plan": [
+    {
+      "name": "cwtest-odn",
+      "plan": {
+        "component": [
+          {
+            "type": "tailf-ncs:self",
+            "name": "self",
+            "state": [
+              {
+                "name": "tailf-ncs:init",
+                "status": "reached",
+                "when": "2026-11-06T20:40:46.497274+00:00",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              },
+              {
+                "name": "tailf-ncs:ready",
+                "status": "reached",
+                "when": "2026-11-06T20:40:51.385536+00:00",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              }
+            ],
+            "back-track": false
+          },
+          {
+            "type": "cisco-sr-te-cfp-sr-odn-nano-plan-services:head-end",
+            "name": "PE-1",
+            "state": [
+              {
+                "name": "tailf-ncs:init",
+                "status": "reached",
+                "when": "2026-11-06T20:40:46.497274+00:00",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              },
+              {
+                "name": "cisco-sr-te-cfp-sr-odn-nano-plan-services:config-apply",
+                "status": "reached",
+                "when": "2026-11-06T20:40:46.497274+00:00",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                },
+                "modified": {
+                  "devices": ["PE-1"],
+                  "services": ["/cisco-sr-te-cfp-internal:sr-te/cisco-sr-te-cfp-sr-odn-internal:odn/odn-template[name='cwtest-odn'][head-end='PE-1']"]
+                },
+                "directly-modified": {
+                  "services": ["/cisco-sr-te-cfp-internal:sr-te/cisco-sr-te-cfp-sr-odn-internal:odn/odn-template[name='cwtest-odn'][head-end='PE-1']"]
+                }
+              },
+              {
+                "name": "tailf-ncs:ready",
+                "status": "reached",
+                "when": "2026-11-06T20:40:51.385536+00:00",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              }
+            ],
+            "back-track": false
+          }
+        ]
+      }
+    }
+  ]
+}

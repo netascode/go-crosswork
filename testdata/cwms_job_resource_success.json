@@ -1,0 +1,1 @@
+{"name":"cwtest-device-1","deviceUuid":"00000000-0000-4000-8000-000000000001","result":"Success","message":"","activities":[{"name":"Apply Config","stage":"configuration","result":"Success","message":"Apply templates successful","startDateTime":"2026-11-03T15:04:19.797013Z","endDateTime":"2026-11-03T15:04:29.671885Z","order":1}]}

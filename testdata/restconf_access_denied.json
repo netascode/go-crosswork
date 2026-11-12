@@ -1,0 +1,11 @@
+{
+ "ietf-restconf:errors": {
+  "error": [
+   {
+    "error-type": "application",
+    "error-tag": "access-denied",
+    "error-message": "access denied"
+   }
+  ]
+ }
+}

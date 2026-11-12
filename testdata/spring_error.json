@@ -1,0 +1,7 @@
+{
+ "timestamp": "2026-10-29T22:00:00.000+00:00",
+ "status": 400,
+ "error": "Bad Request",
+ "message": "Required parameter 'dgID' is not present",
+ "path": "/crosswork/dg-manager/v1/x"
+}

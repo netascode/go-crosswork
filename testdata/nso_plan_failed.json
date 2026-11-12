@@ -1,0 +1,87 @@
+{
+  "cisco-sr-te-cfp-sr-odn:odn-template-plan": [
+    {
+      "name": "cwtest-odnf",
+      "plan": {
+        "component": [
+          {
+            "type": "tailf-ncs:self",
+            "name": "self",
+            "state": [
+              {
+                "name": "tailf-ncs:init",
+                "status": "not-reached",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              },
+              {
+                "name": "tailf-ncs:ready",
+                "status": "not-reached",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              }
+            ],
+            "back-track": true
+          },
+          {
+            "type": "cisco-sr-te-cfp-sr-odn-nano-plan-services:head-end",
+            "name": "PE-1",
+            "state": [
+              {
+                "name": "tailf-ncs:init",
+                "status": "failed",
+                "when": "2026-11-06T20:50:24.713344+00:00",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              },
+              {
+                "name": "cisco-sr-te-cfp-sr-odn-nano-plan-services:config-apply",
+                "status": "not-reached",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              },
+              {
+                "name": "tailf-ncs:ready",
+                "status": "not-reached",
+                "pre-conditions": {
+                },
+                "post-actions": {
+                }
+              }
+            ],
+            "back-track": true,
+            "status-code": "TSDN-SR-301"
+          }
+        ],
+        "failed": [null],
+        "error-info": {
+          "message": "Failed to connect to device PE-1: connection refused: Failed to connect: NEDCOM CONNECT: No route to host in new state"
+        },
+        "status-code-detail": [
+          {
+            "type": "cisco-sr-te-cfp-sr-odn-nano-plan-services:head-end",
+            "name": "PE-1",
+            "code": "TSDN-SR-301",
+            "context": [
+              {
+                "context-name": "Device unreachable",
+                "context-msg": "Failed to connect to device PE-1: connection refused: Failed to connect: NEDCOM CONNECT: No route to host in new state"
+              }
+            ],
+            "severity": "ERROR",
+            "recommended-action": "Check device connectivity from NSO and perform recovery steps.",
+            "impacted-device": "PE-1"
+          }
+        ]
+      }
+    }
+  ]
+}

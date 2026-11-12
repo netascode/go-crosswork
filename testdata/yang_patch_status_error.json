@@ -1,0 +1,21 @@
+{
+ "ietf-yang-patch:yang-patch-status": {
+  "patch-id": "p3",
+  "edit-status": {
+   "edit": [
+    {
+     "edit-id": "1",
+     "errors": {
+      "error": [
+       {
+        "error-type": "application",
+        "error-tag": "unknown-element",
+        "error-message": "bogus-leaf is not a valid element"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

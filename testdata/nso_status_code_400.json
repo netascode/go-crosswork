@@ -1,0 +1,12 @@
+{
+  "ietf-restconf:errors": {
+    "error": [
+      {
+        "error-type": "application",
+        "error-tag": "malformed-message",
+        "error-path": "/ietf-l2vpn-ntw:l2vpn-ntw/vpn-services/vpn-service[vpn-id='cwtest-l2']",
+        "error-message": "/l2vpn-ntw/vpn-services/vpn-service{cwtest-l2}: STATUS_CODE: TSDN-IETF-L2NM-401\nREASON: Missing input\nCATEGORY: validation\nSEVERITY: ERROR\nContext [name = Missing input , message = Resource pool evi-source-target-pool-name must be defined for vpn-type 'vpn-common:vpws-evpn' and auto-evi-source]\n"
+      }
+    ]
+  }
+}

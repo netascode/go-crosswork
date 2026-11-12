@@ -1,0 +1,12 @@
+{
+ "ietf-restconf:errors": {
+  "error": [
+   {
+    "error-type": "application",
+    "error-tag": "data-exists",
+    "error-path": "/tailf-ncs:devices/authgroups",
+    "error-message": "object already exists"
+   }
+  ]
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "result": {
+  "request_result": "ACCEPTED",
+  "error": null
+ },
+ "jobs": [
+  {
+   "job": {
+    "error": {
+     "message": ""
+    }
+   }
+  }
+ ],
+ "error": ""
+}

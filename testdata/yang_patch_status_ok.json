@@ -1,0 +1,8 @@
+{
+ "ietf-yang-patch:yang-patch-status": {
+  "patch-id": "p1",
+  "ok": [
+   null
+  ]
+ }
+}

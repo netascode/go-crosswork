@@ -1,0 +1,11 @@
+{
+ "ietf-restconf:errors": {
+  "error": [
+   {
+    "error-type": "application",
+    "error-tag": "lock-denied",
+    "error-message": "the datastore is locked by another session"
+   }
+  ]
+ }
+}

@@ -1,0 +1,12 @@
+{
+  "ietf-restconf:errors": {
+    "error": [
+      {
+        "error-type": "application",
+        "error-tag": "operation-failed",
+        "error-path": "/cisco-sr-te-cfp:sr-te/cisco-sr-te-cfp-sr-odn:odn/odn-template[name='cwtest-odnsrv6']",
+        "error-message": "External error in the NED implementation for device PE-1: Fri Nov  6 20:41:04.309 UTC\r\n\r\n% Failed to commit one or more configuration items during a pseudo-atomic operation. All changes made have been reverted.\r\n !! SEMANTIC ERRORS: This configuration was rejected by \r\n!! the system due to semantic errors. The individual \r\n!! errors with each failed configuration command can be \r\n!! found below.\r\n\r\n\r\nsegment-routing\r\n traffic-eng\r\n  on-demand color 4303\r\n   srv6\r\n    locator nolocator binding-sid dynamic behavior ub6-insert-reduced\r\n!!% Invalid argument: Unsupported behavior: 71\r\n   !\r\n  !\r\n !\r\n!\r\nend"
+      }
+    ]
+  }
+}

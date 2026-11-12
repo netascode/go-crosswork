@@ -1,0 +1,12 @@
+{
+  "ietf-restconf:errors": {
+    "error": [
+      {
+        "error-type": "application",
+        "error-tag": "invalid-value",
+        "error-path": "/cisco-sr-te-cfp:sr-te/cisco-sr-te-cfp-sr-odn:odn/odn-template[name='cwtest-odnf']",
+        "error-message": "Failed to connect to device PE-1: connection refused: Failed to connect: NEDCOM CONNECT: No route to host in new state"
+      }
+    ]
+  }
+}
