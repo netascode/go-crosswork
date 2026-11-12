@@ -83,7 +83,7 @@ func NewClient(url, usr, pwd string, mods ...func(*Client)) (Client, error) {
 		Timeout:   60 * time.Second,
 		Transport: tr,
 		// Crosswork answers a missing or dead token with a redirect to its SSO login page,
-		// whose host is not reachable through a tunnel. Never follow redirects.
+		// whose host may not be reachable from the client. Never follow redirects.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 

@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-// Crosswork-specific behaviour that depends on the request path lives here, the same way
-// Callers pass full paths, so
-// there are no base-path constants: the library only recognises a few path shapes.
+// Crosswork-specific behaviour that depends on the request path lives here. Callers pass full paths,
+// so there are no base-path constants: the library only recognises a few path shapes.
 
 const (
 	jsonType = "application/json"

@@ -66,8 +66,8 @@ func (c *CursorPager) Next(prev *PageResult) (PageRequest, bool) {
 // options directly under `query_options` (page_size, page_token); the platform services nest
 // them one level deeper, under `query_options.pagination`. The response carries the token of
 // the next page in the same place, and the last page has no `query_options` (collection) or
-// an empty token. The collection service ends the walk with a REJECTED response (see tokenWalkCheck);
-// the platform lists end with an empty page that repeats the token.
+// an empty token. The collection service ends the walk with a REJECTED response, which is accepted
+// as the end of the list; the platform lists end with an empty page that repeats the token.
 type TokenPager struct {
 	Path string
 	// Body is the base request; leave it empty for `{}`.

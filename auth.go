@@ -184,11 +184,11 @@ func (client *Client) reauth(failed string) error {
 
 // Logout ends the Crosswork session that Login or the first call created, by deleting its
 // ticket. Crosswork allows a limited number of sessions per user and counts one per ticket,
-// so a program that logs in more than once (every Terraform run, every test) should call
+// so a program that logs in more than once (every command run, every test) should call
 // Logout when it is done; an unclosed session counts until it times out.
 //
 // Logout does nothing, and returns nil, when there is no session, and for a client created
-// with WithToken, because the token belongs to its provider. A ticket that Crosswork no
+// with WithToken, because the token is managed by whoever issued it. A ticket that Crosswork no
 // longer knows (404, or a rejected token) counts as already ended. After a successful
 // Logout the next call logs in again.
 func (client *Client) Logout() error {

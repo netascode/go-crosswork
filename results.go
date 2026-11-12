@@ -143,7 +143,7 @@ func firstNonEmpty(vals ...string) string {
 var errorLikeKey = regexp.MustCompile(`(?i)error|fail|reject`)
 
 // logUnmatched writes a debug line when a 2xx body has an error-like member with a
-// non-empty string value but matches no rule: that is how new failure shapes get found.
+// non-empty string value but matches no rule, so an unrecognised failure shape shows in the debug log.
 func logUnmatched(res Res) {
 	if !res.IsObject() {
 		return

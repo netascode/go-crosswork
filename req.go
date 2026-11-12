@@ -67,7 +67,7 @@ type Req struct {
 	// RetryNonIdempotent allows retries after an ambiguous failure for any method.
 	RetryNonIdempotent bool
 	// Timeout is a per-request timeout; zero uses the client's timeout (120 seconds for writes
-	// under the NSO proxy, see nsoWriteTimeout). It may be longer than the client's timeout.
+	// under the NSO proxy). It may be longer than the client's timeout.
 	Timeout time.Duration
 	// MaxAsyncWaitTime is the longest time in seconds to wait for the NSO plan of a write (see
 	// PlanPath); zero uses Client.DefaultMaxAsyncWaitTime.

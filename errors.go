@@ -19,10 +19,10 @@ type RestconfError struct {
 }
 
 // APIError is returned for every failed request: a non-2xx status, or a 2xx response
-// whose body reports a failure (see results.go).
+// whose body reports a failure (see ResultCheck).
 //
 // The Error text keeps the `HTTP Request failed: StatusCode N` prefix,
-// so providers that match on it keep working.
+// so callers that match on it keep working.
 type APIError struct {
 	Method     string
 	URL        string
@@ -96,8 +96,8 @@ var notFoundCodes = map[string]bool{
 }
 
 // IsNotFound reports whether err means the object does not exist: an HTTP 404, a
-// RESTCONF `data-missing` error, an error whose structured Code is one of
-// notFoundCodes, or a list of per-entry results in which every failed entry is a 404.
+// RESTCONF `data-missing` error, an error whose structured Code is a known not-found
+// code, or a list of per-entry results in which every failed entry is a 404.
 // It does not search the message text.
 func IsNotFound(err error) bool {
 	ae := asAPIError(err)

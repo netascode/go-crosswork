@@ -12,8 +12,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// YangPatchEdit is one edit of a YANG-PATCH (RFC 8072) request. The names match go-restconf
-// so code written for it keeps compiling.
+// YangPatchEdit is one edit of a YANG-PATCH (RFC 8072) request.
 type YangPatchEdit struct {
 	// Operation is one of create, delete, insert, merge, move, replace or remove.
 	Operation string
@@ -75,11 +74,9 @@ func (client *Client) YangPatch(path, patchID, comment string, edits []YangPatch
 //
 // When NSO rejects a write because another transaction holds the datastore lock, nothing was
 // applied, so the write is safe to retry whatever its method. The policy recognises that
-// from the structured RESTCONF error-tag, `lock-denied` or `in-use`, never from message text
-// (go-restconf also matches IOS-XE and "sync in progress" messages; those are not ported).
+// from the structured RESTCONF error-tag, `lock-denied` or `in-use`, never from message text.
 // It then waits, polling once a second, until the running datastore has no lock or
-// timeoutSeconds have passed (go-restconf's default is 120), and retries with the normal
-// backoff, up to MaxRetries times.
+// timeoutSeconds have passed, and retries with the normal backoff, up to MaxRetries times.
 func NSORetry(timeoutSeconds int) func(*Client) {
 	return func(client *Client) {
 		client.NSOLockTimeout = timeoutSeconds
