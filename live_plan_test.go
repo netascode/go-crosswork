@@ -10,7 +10,7 @@ import (
 
 // The write test creates the SR-TE ODN template cwtest-live-odn through the Crosswork NSO proxy,
 // updates it, deletes it and creates it again at once, and removes it. It needs CW_WRITE=1.
-// With CW_LIVE_NSO_DEVICE set to a device of the NSO dispatch map the template has that head
+// With CW_NSO_DEVICE set to a device of the NSO dispatch map the template has that head
 // end, so the delete does real work on the device and the wait has something to wait for
 // (without it NSO accepts the template and pushes nothing).
 func TestLiveClientPlanWait_ODNTemplate(t *testing.T) {
@@ -24,7 +24,7 @@ func TestLiveClientPlanWait_ODNTemplate(t *testing.T) {
 	)
 	body := func(color int) string {
 		b := Body{}.Set("name", "cwtest-live-odn").Set("color", color).SetRaw("dynamic", `{"pce":{},"metric-type":"igp"}`)
-		if d := os.Getenv("CW_LIVE_NSO_DEVICE"); d != "" {
+		if d := os.Getenv("CW_NSO_DEVICE"); d != "" {
 			b = b.SetRaw("head-end", `[{"name":"`+d+`"}]`)
 		}
 		return Body{}.SetRaw("cisco-sr-te-cfp-sr-odn:odn-template", "["+b.Str+"]").Str
