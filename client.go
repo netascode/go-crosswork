@@ -21,7 +21,7 @@ const (
 	DefaultBackoffMaxDelay    int     = 60
 	DefaultBackoffDelayFactor float64 = 3
 	// DefaultDefaultMaxAsyncWaitTime is the default longest wait for an NSO plan, in seconds.
-	DefaultDefaultMaxAsyncWaitTime int = 180
+	DefaultDefaultMaxAsyncWaitTime int = 300
 	// DefaultPlanPollInterval is the default time between two reads of an NSO plan.
 	DefaultPlanPollInterval = time.Second
 )
@@ -135,7 +135,7 @@ func newTransport() *http.Transport {
 	}
 }
 
-// DefaultMaxAsyncWaitTime modifies the longest wait for an NSO plan from the default of 180 seconds.
+// DefaultMaxAsyncWaitTime modifies the longest wait for an NSO plan from the default of 300 seconds.
 func DefaultMaxAsyncWaitTime(x int) func(*Client) {
 	return func(client *Client) {
 		client.DefaultMaxAsyncWaitTime = x

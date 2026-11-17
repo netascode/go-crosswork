@@ -116,9 +116,9 @@ func TestPlanWait_ClientDefaultMaxWaitTime(t *testing.T) {
 	c := f.client(t, PlanPollInterval(100*time.Millisecond), DefaultMaxAsyncWaitTime(1))
 	_, err := c.Put(odnPath, `{}`, PlanPath(odnPlan))
 	assert.True(t, IsPlanTimeout(err), "the client default applies when the request sets none")
-	assert.Equal(t, 180, DefaultDefaultMaxAsyncWaitTime)
+	assert.Equal(t, 300, DefaultDefaultMaxAsyncWaitTime)
 	d, _ := NewClient("https://x", "u", "p")
-	assert.Equal(t, 180, d.DefaultMaxAsyncWaitTime)
+	assert.Equal(t, 300, d.DefaultMaxAsyncWaitTime)
 	assert.Equal(t, time.Second, d.PlanPollInterval)
 }
 
