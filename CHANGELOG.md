@@ -1,4 +1,4 @@
-## 0.1.2 (unreleased)
+## 0.1.2
 
 - Add `Client.WaitForLogin` to wait until Crosswork accepts logins again after a change that restarts the authentication service
 - Wait for logins to recover after a PUT to the remote authentication servers and the SSO service providers
