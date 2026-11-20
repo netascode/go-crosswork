@@ -335,3 +335,126 @@ func TestClientLogout_SharedByCopies(t *testing.T) {
 	require.NoError(t, c.Logout())
 	assert.Equal(t, 0, f.sessions(), "a copy and the original share one session")
 }
+
+func TestClientWaitForLogin_RecoversAfterFailures(t *testing.T) {
+	f := newFake(t)
+	f.jwtFail = func(n int) bool { return n >= 2 && n <= 4 } // call 1 is the login itself
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	require.NoError(t, c.WaitForLogin(0, time.Millisecond, 5*time.Second))
+	assert.Equal(t, 6, f.callCount("/crosswork/sso/v2/tickets/jwt"), "three failures, then two successes in a row")
+	logins, _ := f.counts()
+	assert.Equal(t, 1, logins, "the ticket of the session is reused, no new session is opened")
+}
+
+func TestClientWaitForLogin_OneSuccessIsNotEnough(t *testing.T) {
+	f := newFake(t)
+	f.jwtFail = func(n int) bool { return n == 3 } // login, ok, fail, ok, ok
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	require.NoError(t, c.WaitForLogin(0, time.Millisecond, 5*time.Second))
+	assert.Equal(t, 5, f.callCount("/crosswork/sso/v2/tickets/jwt"))
+}
+
+func TestClientWaitForLogin_NeverRecovers(t *testing.T) {
+	f := newFake(t)
+	f.jwtFail = func(n int) bool { return n >= 2 }
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	err := c.WaitForLogin(0, time.Millisecond, 100*time.Millisecond)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "had not accepted a new login")
+	assert.Equal(t, http.StatusInternalServerError, StatusCode(err), "the last status of Crosswork is kept")
+}
+
+func TestClientWaitForLogin_SettlesBeforeTheFirstCall(t *testing.T) {
+	f := newFake(t)
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	start := time.Now()
+	require.NoError(t, c.WaitForLogin(150*time.Millisecond, time.Millisecond, 5*time.Second))
+	assert.GreaterOrEqual(t, time.Since(start), 150*time.Millisecond)
+}
+
+func TestClientWaitForLogin_DeadTicketLogsInAgain(t *testing.T) {
+	f := newFake(t)
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	f.terminate()
+	require.NoError(t, c.WaitForLogin(0, time.Millisecond, 5*time.Second))
+	logins, _ := f.counts()
+	assert.Equal(t, 2, logins)
+}
+
+func TestClientWaitForLogin_ContextCancelled(t *testing.T) {
+	f := newFake(t)
+	f.jwtFail = func(n int) bool { return n >= 2 }
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	cc := c.WithContext(ctx)
+	err := cc.WaitForLogin(0, time.Millisecond, 10*time.Second)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestClientWaitForLogin_WithTokenDoesNothing(t *testing.T) {
+	f := newFake(t)
+	c := f.client(t, WithToken(f.tokenFor(time.Hour)))
+	require.NoError(t, c.WaitForLogin(time.Hour, time.Hour, time.Hour))
+	assert.Equal(t, 0, f.callCount("/crosswork/sso/v2/tickets/jwt"))
+}
+
+func shortAuthChangeWait(t *testing.T) {
+	old := authChangeWait
+	authChangeWait = loginWait{settle: 0, interval: time.Millisecond, timeout: 5 * time.Second}
+	t.Cleanup(func() { authChangeWait = old })
+}
+
+func TestClientPut_AuthenticationChangeWaitsForLogin(t *testing.T) {
+	shortAuthChangeWait(t)
+	f := newFake(t)
+	f.api = func(w http.ResponseWriter, r *http.Request, n int) { w.WriteHeader(http.StatusNoContent) }
+	// call 1 is the login; the window opens after the write (call 2 is the first probe) and closes after three failures
+	f.jwtFail = func(n int) bool { return n >= 2 && n <= 4 }
+	c := f.client(t)
+	_, err := c.Put("/crosswork/authconfig/v1/remote/tacacs", `{"tacacs_servers":[]}`, UseMutex)
+	require.NoError(t, err)
+	assert.Equal(t, 6, f.callCount("/crosswork/sso/v2/tickets/jwt"), "three failures, then two successes")
+}
+
+func TestClientPut_AuthenticationChangeThatNeverRecoversFails(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.timeout = 100 * time.Millisecond
+	f := newFake(t)
+	f.api = func(w http.ResponseWriter, r *http.Request, n int) { w.WriteHeader(http.StatusNoContent) }
+	f.jwtFail = func(n int) bool { return n >= 2 }
+	c := f.client(t)
+	_, err := c.Put("/crosswork/authconfig/v1/sso/idp/services", `{"registeredServiceProvider":[]}`, UseMutex)
+	var werr *WaitError
+	require.ErrorAs(t, err, &werr)
+	assert.Contains(t, err.Error(), "had not accepted a new login")
+}
+
+func TestClientPut_OtherAuthenticationWritesDoNotWait(t *testing.T) {
+	shortAuthChangeWait(t)
+	f := newFake(t)
+	f.api = func(w http.ResponseWriter, r *http.Request, n int) { w.WriteHeader(http.StatusNoContent) }
+	c := f.client(t)
+	_, err := c.Put("/crosswork/aaa/v1/sessionconfig", `{}`, UseMutex)
+	require.NoError(t, err)
+	assert.Equal(t, 1, f.callCount("/crosswork/sso/v2/tickets/jwt"), "only the login itself asked for a token")
+}
+
+func TestClientPut_AuthenticationChangeKeepsAnExplicitAfterWrite(t *testing.T) {
+	shortAuthChangeWait(t)
+	f := newFake(t)
+	f.api = func(w http.ResponseWriter, r *http.Request, n int) { w.WriteHeader(http.StatusNoContent) }
+	called := false
+	c := f.client(t)
+	_, err := c.Put("/crosswork/authconfig/v1/remote/tacacs", `{}`, AfterWrite(func(_ context.Context, _ Res) error { called = true; return nil }))
+	require.NoError(t, err)
+	assert.True(t, called)
+	assert.Equal(t, 1, f.callCount("/crosswork/sso/v2/tickets/jwt"), "the caller's function replaces the default wait")
+}

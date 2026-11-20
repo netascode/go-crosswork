@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -346,4 +347,89 @@ func (client *Client) postForm(ctx context.Context, path string, form url.Values
 		// retries exhausted on 429/502-504: hand the status to the caller, which builds the APIError
 		return res.StatusCode, string(body), nil
 	}
+}
+
+// Changes on the AAA page of Crosswork (the remote authentication servers and the SSO service providers) make
+// Crosswork restart its authentication service, and for a while every ticket and JWT request fails. The wait
+// for that window to end is kept apart from the normal login above: Do runs it after such a write.
+
+// loginWait holds the timing of WaitForLogin.
+type loginWait struct{ settle, interval, timeout time.Duration }
+
+// authChangeWait is how a write that restarts the authentication service waits (see restartsLogin and
+// WaitForLogin). Crosswork says a change can take up to three minutes to apply, so the wait allows that
+// long. The window opens a few seconds after the write, so the wait starts with a pause.
+var authChangeWait = loginWait{settle: 15 * time.Second, interval: 10 * time.Second, timeout: 180 * time.Second}
+
+// loginConfirmations is the number of requests in a row that must succeed before WaitForLogin
+// reports that Crosswork accepts logins again.
+const loginConfirmations = 2
+
+// WaitForLogin waits until Crosswork accepts a new JWT request from the ticket of the session
+// again. Some changes (the remote authentication servers and the SSO services) make the
+// authentication service restart: for up to a few minutes after the change every ticket and
+// JWT request fails with HTTP 500, while calls with a token that was already issued keep working.
+// A caller that has made such a change waits with WaitForLogin before it goes on, so the next
+// login, the token refresh and the logout do not fail inside that window.
+//
+// WaitForLogin first pauses for settle, because the window opens a few seconds after the change
+// and a request made at once still succeeds. It then asks for a JWT every interval and returns nil
+// after two requests in a row succeed. When timeout has passed since the call began without that,
+// it returns an error that wraps the last failure. The request uses the existing ticket, so it opens no
+// extra session; a ticket that Crosswork no longer knows is replaced by a login. Nothing is
+// waited for, and nil is returned, for a client created with WithToken. WaitForLogin stops
+// early with the error of the context when the context of the client ends.
+func (client *Client) WaitForLogin(settle, interval, timeout time.Duration) error {
+	if client.s.static {
+		return nil
+	}
+	ctx := client.context()
+	deadline := time.Now().Add(timeout)
+	if err := client.Authenticate(); err != nil {
+		return err
+	}
+	if !sleep(ctx, settle) {
+		return ctx.Err()
+	}
+	var last error
+	confirmed := 0
+	for {
+		if err := client.probeLogin(ctx); err == nil {
+			if confirmed++; confirmed >= loginConfirmations {
+				return nil
+			}
+		} else {
+			confirmed, last = 0, err
+		}
+		if time.Until(deadline) <= interval {
+			break
+		}
+		if !sleep(ctx, interval) {
+			return ctx.Err()
+		}
+	}
+	if last == nil {
+		last = errors.New("the requests did not succeed twice in a row")
+	}
+	return fmt.Errorf("Crosswork had not accepted a new login after %s: %w", timeout, last)
+}
+
+// probeLogin asks for a JWT from the ticket of the session and keeps it; without a ticket, or when
+// Crosswork no longer knows the ticket, it logs in.
+func (client *Client) probeLogin(ctx context.Context) error {
+	client.s.authMu.Lock()
+	defer client.s.authMu.Unlock()
+	tgt := client.s.ticket()
+	if tgt == "" {
+		return client.loginLocked()
+	}
+	jwt, err := client.requestJWT(ctx, tgt)
+	if err == nil {
+		client.s.set(tgt, jwt)
+		return nil
+	}
+	if StatusCode(err) == http.StatusNotFound {
+		return client.loginLocked()
+	}
+	return err
 }

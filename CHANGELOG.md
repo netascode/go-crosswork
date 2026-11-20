@@ -1,5 +1,7 @@
 ## 0.1.2 (unreleased)
 
+- Add `Client.WaitForLogin` to wait until Crosswork accepts logins again after a change that restarts the authentication service
+- Wait for logins to recover after a PUT to the remote authentication servers and the SSO service providers
 - Increase the default wait for an NSO plan (`DefaultDefaultMaxAsyncWaitTime`) from 180 to 300 seconds
 
 ## 0.1.1

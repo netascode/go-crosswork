@@ -35,7 +35,8 @@ type fakeCW struct {
 	reqs        []recorded
 	api         func(w http.ResponseWriter, r *http.Request, n int)
 	calls       map[string]int
-	logoutCode  int // answer for DELETE tickets/{tgt}; 0 means the real behaviour
+	logoutCode  int              // answer for DELETE tickets/{tgt}; 0 means the real behaviour
+	jwtFail     func(n int) bool // answer 500 to the nth JWT call when it returns true
 }
 
 type recorded struct {
@@ -156,6 +157,10 @@ func (f *fakeCW) serve(w http.ResponseWriter, r *http.Request) {
 		form, _ := url.ParseQuery(string(body))
 		svc, _ := url.Parse(form.Get("service"))
 		switch {
+		case f.jwtFail != nil && f.jwtFail(f.calls[r.URL.Path]):
+			f.mu.Unlock()
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, `{"error":"There was a problem proxying the request"}`)
 		case !f.tgts[form.Get("tgt")]:
 			f.mu.Unlock()
 			w.WriteHeader(http.StatusNotFound)
