@@ -325,6 +325,13 @@ func (client *Client) Do(req Req) (Res, error) {
 
 	attempts := 0
 	for {
+		if !authChange {
+			// Also before a repeat of the request: one that was sent just before a restart began is answered with an
+			// error (a 401 from the NSO proxy, for example) and must not be sent again into the restart.
+			if err := client.s.change.hold(ctx); err != nil {
+				return Res{}, err
+			}
+		}
 		if err := client.Authenticate(); err != nil {
 			return Res{}, err
 		}

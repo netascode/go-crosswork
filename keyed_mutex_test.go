@@ -403,3 +403,40 @@ func TestClientDo_HeldRequestStopsWithItsContext(t *testing.T) {
 	_, err := cc.Get(apiPath)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
+
+func TestClientDo_RepeatAfterAnAuthenticationFailureWaitsForTheRestart(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.settle = 300 * time.Millisecond
+	f := newFake(t)
+	noted := make(chan struct{})
+	var mu sync.Mutex
+	var repeat time.Time
+	f.api = func(w http.ResponseWriter, r *http.Request, n int) {
+		if n == 1 { // sent before the restart: answered with the error of the NSO proxy once the write has been noted
+			<-noted
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, `{"ietf-restconf:errors":{"error":[{"error-type":"protocol","error-tag":"access-denied"}]}}`)
+			return
+		}
+		mu.Lock()
+		repeat = time.Now()
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Get(apiPath)
+		done <- err
+	}()
+	require.Eventually(t, func() bool { return f.callCount(apiPath) == 1 }, 3*time.Second, 5*time.Millisecond)
+	n := c.s.change.note() // an authentication write of the same apply lands while the request is in flight
+	noted2 := time.Now()
+	go func() { _ = c.awaitAuthChange(n) }()
+	close(noted)
+	require.NoError(t, <-done)
+	mu.Lock()
+	defer mu.Unlock()
+	assert.GreaterOrEqual(t, repeat.Sub(noted2), 250*time.Millisecond, "the request is repeated only after the restart")
+}
