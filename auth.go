@@ -523,7 +523,8 @@ func (a *authChange) finish(covers uint64, err error) {
 // awaitAuthChange waits until Crosswork accepts logins again after write n (see authChange.note). The writers of a
 // burst, which Crosswork treats as one restart, share the wait: the first one polls and the others find its result.
 // The wait first pauses until authChangeWait.settle has passed since the latest write, so writes that land during the
-// pause are covered by the same poll; a write made after the poll began gets a wait of its own. The wait runs without
+// pause are covered by the same poll; a write made after the poll began gets a wait of its own, and a poll that fails after
+// such a write starts again from that write. The wait runs without
 // the lock of the write, so it holds up neither the next write nor any other request.
 func (client *Client) awaitAuthChange(n uint64) error {
 	ctx := client.context()
@@ -535,15 +536,27 @@ func (client *Client) awaitAuthChange(n uint64) error {
 	if done, err := client.s.change.outcome(n); done {
 		return err
 	}
-	covers, err := client.settleAuthChange(ctx)
-	if err != nil {
+	for {
+		covers, err := client.settleAuthChange(ctx)
+		if err != nil {
+			return err
+		}
+		err = client.waitForLogin(ctx, 0, authChangeWait.interval, authChangeWait.timeout)
+		if ctx.Err() != nil { // a cancelled wait says nothing about the restart
+			return err
+		}
+		if err == nil {
+			client.s.change.finish(covers, nil)
+			return nil
+		}
+		if latest, _ := client.s.change.round(); latest > covers {
+			// A write made while the poll ran started another restart, and the failure may be its: wait again,
+			// with the pause and the limit counted from that write.
+			continue
+		}
+		client.s.change.finish(covers, err)
 		return err
 	}
-	err = client.waitForLogin(ctx, 0, authChangeWait.interval, authChangeWait.timeout)
-	if ctx.Err() == nil { // a cancelled wait says nothing about the restart
-		client.s.change.finish(covers, err)
-	}
-	return err
 }
 
 // settleAuthChange pauses until authChangeWait.settle has passed since the latest write, which may move while it

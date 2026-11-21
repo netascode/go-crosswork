@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -713,4 +714,33 @@ func TestAwaitAuthChange_WritesDuringThePauseShareThePoll(t *testing.T) {
 	}
 	assert.Equal(t, 3, f.callCount("/crosswork/sso/v2/tickets/jwt"), "the login and one poll of two successes for the three writes")
 	assert.GreaterOrEqual(t, time.Since(start), 500*time.Millisecond, "the pause ran from the latest write (at 200 ms)")
+}
+
+func TestAwaitAuthChange_WriteDuringThePollStartsTheWaitAgain(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.timeout = 150 * time.Millisecond
+	f := newFake(t)
+	var failing atomic.Bool
+	failing.Store(true)
+	f.jwtFail = func(n int) bool { return n >= 2 && failing.Load() }
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	first := c.s.change.note()
+	done := make(chan error, 1)
+	go func() { done <- c.awaitAuthChange(first) }()
+	time.Sleep(50 * time.Millisecond)
+	second := c.s.change.note() // lands while the poll of the first write runs
+	select {
+	case err := <-done:
+		t.Fatalf("the wait ended with %v although a later write had started another restart", err)
+	case <-time.After(200 * time.Millisecond): // the first poll ran out its limit at 150 ms; the wait started again
+	}
+	failing.Store(false)
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("the wait did not end after logins worked again")
+	}
+	require.NoError(t, c.awaitAuthChange(second))
 }
