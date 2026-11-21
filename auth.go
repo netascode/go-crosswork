@@ -478,6 +478,53 @@ type authChange struct {
 	settled  uint64    // the writes up to this number are covered by a wait that succeeded
 	failedAt uint64    // the writes up to this number are covered by a wait that failed with err
 	err      error
+	wake     chan struct{} // closed, and replaced, each time a write is noted or a wait finishes
+}
+
+// signal wakes the requests that wait for the restart to end. The caller holds mu.
+func (a *authChange) signal() {
+	if a.wake != nil {
+		close(a.wake)
+	}
+	a.wake = make(chan struct{})
+}
+
+// pending reports whether a write is not covered by a finished wait yet. The caller holds mu.
+func (a *authChange) pending() bool { return a.writes > max(a.settled, a.failedAt) }
+
+// hold blocks a request that is not part of the change until logins work again. Crosswork holds some of the requests
+// it receives while its authentication service restarts, and a request that is held for as long as the restart lasts
+// can run into its timeout, so the client does not send one while a restart is under way. The hold ends when the wait
+// for the last write has finished, whether it succeeded or failed, and in any case a little after the longest that wait
+// can last, so a wait that never ran cannot block requests for good. It ends early with the error of the context.
+func (a *authChange) hold(ctx context.Context) error {
+	for {
+		a.mu.Lock()
+		if !a.pending() {
+			a.mu.Unlock()
+			return nil
+		}
+		until := a.last.Add(authChangeWait.settle + authChangeWait.timeout + authChangeWait.interval)
+		if a.wake == nil {
+			a.wake = make(chan struct{})
+		}
+		wake := a.wake
+		a.mu.Unlock()
+		d := time.Until(until)
+		if d <= 0 {
+			return nil
+		}
+		timer := time.NewTimer(d)
+		select {
+		case <-wake:
+			timer.Stop()
+		case <-timer.C:
+			return nil
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		}
+	}
 }
 
 // note records a write and returns its number.
@@ -486,6 +533,7 @@ func (a *authChange) note() uint64 {
 	defer a.mu.Unlock()
 	a.writes++
 	a.last = time.Now()
+	a.signal()
 	return a.writes
 }
 
@@ -518,6 +566,7 @@ func (a *authChange) finish(covers uint64, err error) {
 	} else if covers > a.failedAt {
 		a.failedAt, a.err = covers, err
 	}
+	a.signal()
 }
 
 // awaitAuthChange waits until Crosswork accepts logins again after write n (see authChange.note). The writers of a
@@ -542,8 +591,8 @@ func (client *Client) awaitAuthChange(n uint64) error {
 			return err
 		}
 		err = client.waitForLogin(ctx, 0, authChangeWait.interval, authChangeWait.timeout)
-		if ctx.Err() != nil { // a cancelled wait says nothing about the restart
-			return err
+		if cerr := ctxEnded(ctx); cerr != nil { // a cancelled wait says nothing about the restart
+			return cerr
 		}
 		if err == nil {
 			client.s.change.finish(covers, nil)
@@ -628,10 +677,22 @@ func (client *Client) waitForLogin(parent context.Context, settle, interval, tim
 	}
 }
 
+// ctxEnded returns the error of the context when it has ended, or when its deadline has passed but the context has not
+// noticed yet (the timer that ends it can fire a moment after the deadline), and nil otherwise.
+func ctxEnded(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if d, ok := ctx.Deadline(); ok && !time.Now().Before(d) {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
 // pollEnded is the error of a wait that ran out: the error of the caller's context when that ended first, and
 // otherwise one that wraps the last failure of the poll.
 func pollEnded(parent context.Context, timeout time.Duration, last error) error {
-	if err := parent.Err(); err != nil {
+	if err := ctxEnded(parent); err != nil {
 		return err
 	}
 	if last == nil {

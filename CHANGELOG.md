@@ -3,6 +3,7 @@
 - Write to the remote authentication servers and the SSO service providers under a lock of their own
 - Share one wait for the login to recover between those writes
 - Retry logins while the authentication service of Crosswork restarts
+- Hold other requests on the client while the authentication service restarts
 
 ## 0.1.2
 

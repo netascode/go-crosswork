@@ -306,6 +306,12 @@ func (client *Client) Do(req Req) (Res, error) {
 	}
 	applyDefaultHeaders(&req)
 
+	if !restartsAuth(req) {
+		// Nothing but the writes that cause a restart is sent while one is under way (see authChange.hold).
+		if err := client.s.change.hold(req.HttpReq.Context()); err != nil {
+			return Res{}, err
+		}
+	}
 	release, err := client.lockWrite(req)
 	if err != nil {
 		return Res{}, err

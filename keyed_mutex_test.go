@@ -289,26 +289,117 @@ func TestClientDo_AuthenticationChangesAreWrittenOneAtATime(t *testing.T) {
 	assert.EqualValues(t, 1, atomic.LoadInt32(&peak), "the writes to the authentication servers and SSO never overlap")
 }
 
-func TestClientDo_AuthenticationWaitDoesNotHoldUpOtherWrites(t *testing.T) {
-	shortAuthChangeWait(t)
-	authChangeWait.settle = 600 * time.Millisecond // the wait outlasts the second write
+// holdFake returns a fake whose API answers 204 and counts the calls of each path, a client of it, and the function that
+// starts a write to the authentication servers and returns the channel of its result.
+func holdFake(t *testing.T) (*fakeCW, Client, func() chan error) {
 	f := newFake(t)
 	f.api = func(w http.ResponseWriter, r *http.Request, _ int) { w.WriteHeader(http.StatusNoContent) }
 	c := f.client(t)
-	waiting := make(chan error, 1)
-	go func() {
-		_, err := c.Put(authChangePath, `{}`, UseMutex)
-		waiting <- err
-	}()
-	require.Eventually(t, func() bool { return f.callCount(authChangePath) == 1 }, 3*time.Second, 5*time.Millisecond)
-	start := time.Now()
-	_, err := c.Put("/crosswork/aaa/v1/passwordPolicyConfig", `{}`, UseMutex)
-	require.NoError(t, err)
-	assert.Less(t, time.Since(start), 300*time.Millisecond, "another write does not wait for the restart")
-	select {
-	case <-waiting:
-		t.Fatal("the wait ended before its pause")
-	default:
+	return f, c, func() chan error {
+		done := make(chan error, 1)
+		go func() {
+			_, err := c.Put(authChangePath, `{}`, UseMutex)
+			done <- err
+		}()
+		return done
 	}
+}
+
+func TestClientDo_RequestsAreHeldWhileTheAuthenticationServiceRestarts(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.settle = 400 * time.Millisecond
+	f, c, write := holdFake(t)
+	require.NoError(t, c.Login())
+	waiting := write()
+	require.Eventually(t, func() bool { return f.callCount(authChangePath) == 1 }, 3*time.Second, 5*time.Millisecond)
+	time.Sleep(20 * time.Millisecond) // the write is noted once the answer has arrived
+	sends := map[string]func() error{
+		"a write with the client's lock": func() error {
+			_, err := c.Put("/crosswork/aaa/v1/passwordPolicyConfig", `{}`, UseMutex)
+			return err
+		},
+		"a read": func() error { _, err := c.Get(apiPath); return err },
+	}
+	start := time.Now()
+	var wg sync.WaitGroup
+	for name, send := range sends { // together, so that both are sent while the restart is under way
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			assert.NoError(t, send(), name)
+			assert.GreaterOrEqual(t, time.Since(start), 250*time.Millisecond, name+" is held until the restart is over")
+		}()
+	}
+	wg.Wait()
 	require.NoError(t, <-waiting)
+}
+
+func TestClientDo_WritesOfTheChangeAreNotHeld(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.settle = 600 * time.Millisecond
+	f, c, write := holdFake(t)
+	require.NoError(t, c.Login())
+	first := write()
+	require.Eventually(t, func() bool { return f.callCount(authChangePath) == 1 }, 3*time.Second, 5*time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	start := time.Now()
+	second := write() // a second write of the same burst
+	require.Eventually(t, func() bool { return f.callCount(authChangePath) == 2 }, 300*time.Millisecond, 5*time.Millisecond, "a write of the change is sent at once")
+	assert.Less(t, time.Since(start), 300*time.Millisecond)
+	require.NoError(t, <-first)
+	require.NoError(t, <-second)
+}
+
+func TestClientDo_NothingIsHeldWithoutARestart(t *testing.T) {
+	f, c, _ := holdFake(t)
+	require.NoError(t, c.Login())
+	start := time.Now()
+	_, err := c.Get(apiPath)
+	require.NoError(t, err)
+	_, err = c.Put("/crosswork/aaa/v1/passwordPolicyConfig", `{}`, UseMutex)
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), 300*time.Millisecond)
+	assert.Equal(t, 0, f.callCount(authChangePath))
+}
+
+func TestClientDo_RequestsAreReleasedWhenTheWaitFails(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.timeout = 150 * time.Millisecond
+	f, c, write := holdFake(t)
+	f.jwtFail = func(n int) bool { return n >= 2 }
+	require.NoError(t, c.Login())
+	waiting := write()
+	require.Eventually(t, func() bool { return f.callCount(authChangePath) == 1 }, 3*time.Second, 5*time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	_, err := c.Get(apiPath)
+	require.NoError(t, err, "a request goes on when the wait has failed")
+	var werr *WaitError
+	require.ErrorAs(t, <-waiting, &werr)
+}
+
+func TestClientDo_HoldEndsWhenNoWaitRuns(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.settle, authChangeWait.timeout, authChangeWait.interval = 50*time.Millisecond, 50*time.Millisecond, time.Millisecond
+	f, c, _ := holdFake(t)
+	require.NoError(t, c.Login())
+	c.s.change.note() // a write whose wait never runs, as when its caller was cancelled
+	start := time.Now()
+	_, err := c.Get(apiPath)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, time.Since(start), 90*time.Millisecond)
+	assert.Less(t, time.Since(start), 2*time.Second, "the hold cannot block requests for good")
+	_ = f
+}
+
+func TestClientDo_HeldRequestStopsWithItsContext(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.settle = time.Hour
+	_, c, _ := holdFake(t)
+	require.NoError(t, c.Login())
+	c.s.change.note()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	cc := c.WithContext(ctx)
+	_, err := cc.Get(apiPath)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
