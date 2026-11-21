@@ -2,7 +2,9 @@ package crosswork
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -457,4 +459,258 @@ func TestClientPut_AuthenticationChangeKeepsAnExplicitAfterWrite(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, called)
 	assert.Equal(t, 1, f.callCount("/crosswork/sso/v2/tickets/jwt"), "the caller's function replaces the default wait")
+}
+
+func shortLoginWindow(t *testing.T) {
+	old := loginWindow
+	loginWindow = loginTiming{retryInterval: time.Millisecond, retryBudget: 5 * time.Second, callTimeout: 5 * time.Second}
+	t.Cleanup(func() { loginWindow = old })
+}
+
+func TestIsAuthRestart(t *testing.T) {
+	restart := `{"error":"There was a problem proxying the request"}`
+	for name, tc := range map[string]struct {
+		status int
+		body   string
+		want   bool
+	}{
+		"the restart":              {500, restart, true},
+		"another 500":              {500, `{"error":"boom"}`, false},
+		"the message with a 502":   {502, restart, false},
+		"a rejected password":      {401, `{"authentication_exceptions":["Invalid credentials"]}`, false},
+		"no answer at all":         {0, "", false},
+		"a 500 with an empty body": {500, "", false},
+	} {
+		t.Run(name, func(t *testing.T) { assert.Equal(t, tc.want, isAuthRestart(tc.status, tc.body)) })
+	}
+}
+
+func TestIsHeld(t *testing.T) {
+	assert.False(t, isHeld(nil))
+	assert.False(t, isHeld(http.ErrServerClosed), "an error that is not a timeout")
+	assert.True(t, isHeld(&url.Error{Op: "Post", URL: "https://x", Err: context.DeadlineExceeded}), "no answer in time")
+	assert.False(t, isHeld(&net.OpError{Op: "dial", Net: "tcp", Err: context.DeadlineExceeded}), "no connection was made")
+}
+
+func TestClientLogin_WaitsOutTheRestart(t *testing.T) {
+	shortLoginWindow(t)
+	f := newFake(t)
+	f.ticketFail = func(n int) bool { return n <= 2 }
+	f.jwtFail = func(n int) bool { return n <= 2 }
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	assert.Equal(t, 3, f.callCount("/crosswork/sso/v1/tickets"), "two refused, then one that works")
+	assert.Equal(t, 3, f.callCount("/crosswork/sso/v2/tickets/jwt"))
+	assert.Equal(t, 1, f.sessions())
+}
+
+func TestClientLogin_OtherServerErrorsFailAtOnce(t *testing.T) {
+	shortLoginWindow(t)
+	for name, tc := range map[string]struct {
+		mod               func(f *fakeCW)
+		tickets, jwtCalls int
+	}{
+		"ticket": {func(f *fakeCW) { f.ticketFail = func(int) bool { return true } }, 1, 0},
+		"jwt":    {func(f *fakeCW) { f.jwtFail = func(int) bool { return true } }, 1, 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFake(t)
+			f.plain500 = true // a 500 that is not the answer of the restart
+			tc.mod(f)
+			c := f.client(t)
+			err := c.Login()
+			require.Error(t, err)
+			assert.Equal(t, http.StatusInternalServerError, StatusCode(err))
+			assert.Equal(t, tc.tickets, f.callCount("/crosswork/sso/v1/tickets"), "one attempt")
+			assert.Equal(t, tc.jwtCalls, f.callCount("/crosswork/sso/v2/tickets/jwt"), "one attempt")
+		})
+	}
+}
+
+func TestClientLogin_RejectedPasswordFailsAtOnce(t *testing.T) {
+	shortLoginWindow(t)
+	f := newFake(t)
+	f.password = "other"
+	c := f.client(t)
+	err := c.Login()
+	require.Error(t, err)
+	assert.Equal(t, http.StatusUnauthorized, StatusCode(err))
+	assert.Equal(t, 1, f.callCount("/crosswork/sso/v1/tickets"))
+}
+
+func TestClientLogin_GivesUpWhenTheRestartDoesNotEnd(t *testing.T) {
+	shortLoginWindow(t)
+	loginWindow.retryBudget = 50 * time.Millisecond
+	f := newFake(t)
+	f.jwtFail = func(int) bool { return true }
+	c := f.client(t)
+	err := c.Login()
+	require.Error(t, err)
+	assert.Equal(t, http.StatusInternalServerError, StatusCode(err), "the answer of Crosswork is returned")
+	assert.Greater(t, f.callCount("/crosswork/sso/v2/tickets/jwt"), 1, "it tried more than once")
+}
+
+func TestClientLogin_HeldRequestGetsTheLongTimeout(t *testing.T) {
+	shortLoginWindow(t)
+	f := newFake(t)
+	f.jwtHold = func(n int) time.Duration {
+		if n == 1 {
+			return 400 * time.Millisecond
+		}
+		return 0
+	}
+	c := f.client(t)
+	c.HttpClient.Timeout = 100 * time.Millisecond
+	require.NoError(t, c.Login())
+	assert.Equal(t, 2, f.callCount("/crosswork/sso/v2/tickets/jwt"), "the held request timed out and was tried again")
+}
+
+func TestClientWaitForLogin_PollIsNotCutOffByTheClientTimeout(t *testing.T) {
+	shortLoginWindow(t)
+	f := newFake(t)
+	f.jwtHold = func(n int) time.Duration {
+		if n == 2 { // call 1 is the login
+			return 300 * time.Millisecond
+		}
+		return 0
+	}
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	c.HttpClient.Timeout = 100 * time.Millisecond
+	require.NoError(t, c.WaitForLogin(0, time.Millisecond, 5*time.Second))
+	assert.Equal(t, 3, f.callCount("/crosswork/sso/v2/tickets/jwt"), "the login, the held poll (the first confirmation) and the second confirmation")
+}
+
+func TestAwaitAuthChange_BurstSharesOneWait(t *testing.T) {
+	shortAuthChangeWait(t)
+	f := newFake(t)
+	f.jwtFail = func(n int) bool { return n >= 2 && n <= 4 }
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	writes := make([]uint64, 4)
+	for i := range writes {
+		writes[i] = c.s.change.note()
+	}
+	errs := make([]error, len(writes))
+	var wg sync.WaitGroup
+	for i := range writes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = c.awaitAuthChange(writes[i])
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, 6, f.callCount("/crosswork/sso/v2/tickets/jwt"), "the login, three failures and two successes: one wait for four writes")
+}
+
+func TestAwaitAuthChange_LaterWriteGetsItsOwnWait(t *testing.T) {
+	shortAuthChangeWait(t)
+	f := newFake(t)
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	require.NoError(t, c.awaitAuthChange(c.s.change.note()))
+	assert.Equal(t, 3, f.callCount("/crosswork/sso/v2/tickets/jwt"), "the login and two successes")
+	require.NoError(t, c.awaitAuthChange(c.s.change.note()))
+	assert.Equal(t, 5, f.callCount("/crosswork/sso/v2/tickets/jwt"), "a write made after the wait is not covered by it")
+}
+
+func TestAwaitAuthChange_FailureIsSharedNotRepeated(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.timeout = 200 * time.Millisecond
+	f := newFake(t)
+	f.jwtFail = func(n int) bool { return n >= 2 }
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	writes := []uint64{c.s.change.note(), c.s.change.note(), c.s.change.note()}
+	errs := make([]error, len(writes))
+	var wg sync.WaitGroup
+	start := time.Now()
+	for i := range writes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = c.awaitAuthChange(writes[i])
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "had not accepted a new login")
+	}
+	assert.Less(t, time.Since(start), 500*time.Millisecond, "the three writers share one failed wait, not three")
+}
+
+func TestAwaitAuthChange_PauseCountsFromTheLatestWrite(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.settle = 200 * time.Millisecond
+	f := newFake(t)
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	start := time.Now()
+	n := c.s.change.note()
+	time.Sleep(150 * time.Millisecond)
+	require.NoError(t, c.awaitAuthChange(n))
+	elapsed := time.Since(start)
+	assert.GreaterOrEqual(t, elapsed, 200*time.Millisecond, "the pause is over before the first poll")
+	assert.Less(t, elapsed, 345*time.Millisecond, "the time since the write counts towards the pause")
+}
+
+func TestAwaitAuthChange_CancelledWaitIsNotRecorded(t *testing.T) {
+	shortAuthChangeWait(t)
+	f := newFake(t)
+	f.jwtFail = func(n int) bool { return n >= 2 && n <= 1000 }
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	n := c.s.change.note()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	cc := c.WithContext(ctx)
+	require.Error(t, cc.awaitAuthChange(n))
+	done, _ := c.s.change.outcome(n)
+	assert.False(t, done, "a wait that was cancelled says nothing about the restart")
+}
+
+func TestClientLogin_HeldRequestsStopAtTheBudget(t *testing.T) {
+	shortLoginWindow(t)
+	loginWindow.retryBudget = 150 * time.Millisecond
+	loginWindow.callTimeout = 60 * time.Millisecond
+	f := newFake(t)
+	f.jwtHold = func(int) time.Duration { return 300 * time.Millisecond }
+	c := f.client(t)
+	c.HttpClient.Timeout = 40 * time.Millisecond
+	start := time.Now()
+	err := c.Login()
+	require.Error(t, err)
+	assert.True(t, isHeld(err), "the request was held: %v", err)
+	assert.Less(t, time.Since(start), time.Second, "no retries on top of the budget")
+}
+
+func TestAwaitAuthChange_WritesDuringThePauseShareThePoll(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.settle = 300 * time.Millisecond
+	f := newFake(t)
+	c := f.client(t)
+	require.NoError(t, c.Login())
+	var wg sync.WaitGroup
+	errs := make([]error, 3)
+	start := time.Now()
+	for i := range errs {
+		n := c.s.change.note()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = c.awaitAuthChange(n)
+		}()
+		time.Sleep(100 * time.Millisecond) // the next write lands while the first waiter is still pausing
+	}
+	wg.Wait()
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, 3, f.callCount("/crosswork/sso/v2/tickets/jwt"), "the login and one poll of two successes for the three writes")
+	assert.GreaterOrEqual(t, time.Since(start), 500*time.Millisecond, "the pause ran from the latest write (at 200 ms)")
 }

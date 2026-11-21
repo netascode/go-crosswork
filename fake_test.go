@@ -35,8 +35,20 @@ type fakeCW struct {
 	reqs        []recorded
 	api         func(w http.ResponseWriter, r *http.Request, n int)
 	calls       map[string]int
-	logoutCode  int              // answer for DELETE tickets/{tgt}; 0 means the real behaviour
-	jwtFail     func(n int) bool // answer 500 to the nth JWT call when it returns true
+	logoutCode  int                       // answer for DELETE tickets/{tgt}; 0 means the real behaviour
+	jwtFail     func(n int) bool          // answer 500 to the nth JWT call when it returns true
+	ticketFail  func(n int) bool          // answer 500 to the nth ticket call when it returns true
+	plain500    bool                      // the 500 of jwtFail and ticketFail has no restart message
+	jwtHold     func(n int) time.Duration // hold the nth JWT call this long before it is answered
+}
+
+// failBody is the body of the 500 that jwtFail and ticketFail answer with: the message Crosswork gives while
+// its authentication service restarts, unless plain500 asks for another error.
+func (f *fakeCW) failBody() string {
+	if f.plain500 {
+		return `{"error":"something else went wrong"}`
+	}
+	return `{"error":"There was a problem proxying the request"}`
 }
 
 type recorded struct {
@@ -138,6 +150,12 @@ func (f *fakeCW) serve(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/crosswork/sso/v1/tickets":
 		f.ticketCalls++
+		if f.ticketFail != nil && f.ticketFail(f.calls[r.URL.Path]) {
+			f.mu.Unlock()
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, f.failBody())
+			return
+		}
 		form, _ := url.ParseQuery(string(body))
 		if form.Get("username") != "admin" || form.Get("password") != f.password {
 			f.mu.Unlock()
@@ -154,13 +172,20 @@ func (f *fakeCW) serve(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, tgt)
 		return
 	case "/crosswork/sso/v2/tickets/jwt":
+		if f.jwtHold != nil {
+			if d := f.jwtHold(n); d > 0 {
+				f.mu.Unlock()
+				time.Sleep(d)
+				f.mu.Lock()
+			}
+		}
 		form, _ := url.ParseQuery(string(body))
 		svc, _ := url.Parse(form.Get("service"))
 		switch {
 		case f.jwtFail != nil && f.jwtFail(f.calls[r.URL.Path]):
 			f.mu.Unlock()
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprint(w, `{"error":"There was a problem proxying the request"}`)
+			fmt.Fprint(w, f.failBody())
 		case !f.tgts[form.Get("tgt")]:
 			f.mu.Unlock()
 			w.WriteHeader(http.StatusNotFound)

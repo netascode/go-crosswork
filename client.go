@@ -306,17 +306,12 @@ func (client *Client) Do(req Req) (Res, error) {
 	}
 	applyDefaultHeaders(&req)
 
-	if req.UseMutex && req.HttpReq.Method != http.MethodGet {
-		client.s.writeMu.Lock()
-		defer client.s.writeMu.Unlock()
+	release, err := client.lockWrite(req)
+	if err != nil {
+		return Res{}, err
 	}
-	if req.MutexKey != "" && req.HttpReq.Method != http.MethodGet {
-		unlock, err := client.s.lockKey(req.HttpReq.Context(), req.MutexKey)
-		if err != nil {
-			return Res{}, err
-		}
-		defer unlock()
-	}
+	defer release()
+	authChange := restartsAuth(req)
 	ctx := req.HttpReq.Context()
 	defer func() {
 		log.Printf("[DEBUG] Exit from Do method: %s, %s", req.HttpReq.Method, req.HttpReq.URL)
@@ -353,8 +348,12 @@ func (client *Client) Do(req Req) (Res, error) {
 			if err == nil && req.PlanPath != "" && !req.NoWait && req.HttpReq.Method != http.MethodGet {
 				err = client.waitForPlan(req)
 			}
-			if err == nil && req.AfterWrite == nil && req.HttpReq.Method == http.MethodPut && restartsLogin(matchPath(req.HttpReq.URL)) {
-				if werr := client.WaitForLogin(authChangeWait.settle, authChangeWait.interval, authChangeWait.timeout); werr != nil {
+			if err == nil && authChange && req.AfterWrite == nil {
+				// The write is done: note it and let go of the lock, so that the writers that follow do not wait
+				// for the restart one by one and other writes are not held up. The wait is shared (awaitAuthChange).
+				n := client.s.change.note()
+				release()
+				if werr := client.awaitAuthChange(n); werr != nil {
 					err = &WaitError{Err: werr}
 				}
 			}
@@ -421,6 +420,53 @@ func (client *Client) Do(req Req) (Res, error) {
 	}
 }
 
+// lockWrite takes the locks a write asks for and returns the function that lets them go again, which may be
+// called more than once. A read takes none. A write to the remote authentication servers or the SSO service
+// providers (restartsAuth) takes the lock of its own (authChangeLockKey) in place of the client's write lock
+// that UseMutex asks for, because Crosswork then restarts its authentication service and the writes that follow
+// must not wait for that. A request that names a key with UseMutexKey takes that lock as well.
+func (client *Client) lockWrite(req Req) (release func(), err error) {
+	var unlocks []func()
+	release = func() {
+		for i := len(unlocks) - 1; i >= 0; i-- {
+			unlocks[i]()
+		}
+		unlocks = nil
+	}
+	if req.HttpReq.Method == http.MethodGet {
+		return release, nil
+	}
+	lockKey := func(key string) error {
+		unlock, err := client.s.lockKey(req.HttpReq.Context(), key)
+		if err != nil {
+			return err
+		}
+		unlocks = append(unlocks, unlock)
+		return nil
+	}
+	switch {
+	case restartsAuth(req):
+		if err := lockKey(authChangeLockKey); err != nil {
+			return release, err
+		}
+	case req.UseMutex:
+		client.s.writeMu.Lock()
+		unlocks = append(unlocks, client.s.writeMu.Unlock)
+	}
+	if req.MutexKey != "" {
+		if err := lockKey(req.MutexKey); err != nil {
+			release()
+			return release, err
+		}
+	}
+	return release, nil
+}
+
+// restartsAuth reports whether the request is a PUT that makes Crosswork restart its authentication service.
+func restartsAuth(req Req) bool {
+	return req.HttpReq.Method == http.MethodPut && restartsLogin(matchPath(req.HttpReq.URL))
+}
+
 // isAccessDenied reports whether a body carries the RESTCONF error-tag access-denied (RFC 8040),
 // which NSO's access control returns for a user without rights. It is a structured tag, not
 // message text, and it means the token is fine: logging in again would not help.
@@ -460,16 +506,8 @@ func (client *Client) send(req Req, body []byte, token string) (int, http.Header
 	if timeout <= 0 {
 		timeout = defaultTimeout(req)
 	}
-	httpClient := client.HttpClient
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-		// The context deadline replaces the client timeout, so a request may take longer than it.
-		hc := *httpClient
-		hc.Timeout = 0
-		httpClient = &hc
-	}
+	ctx, httpClient, cancel := withTimeout(ctx, client.HttpClient, timeout)
+	defer cancel()
 	r := req.HttpReq.Clone(ctx)
 	if len(body) > 0 {
 		r.Body = io.NopCloser(bytes.NewReader(body))
@@ -492,6 +530,19 @@ func (client *Client) send(req Req, body []byte, token string) (int, http.Header
 		return 0, nil, nil, err
 	}
 	return res.StatusCode, res.Header, raw, nil
+}
+
+// withTimeout returns the context and the HTTP client for one request. With a timeout, the deadline is set on the
+// context and the client gets none of its own, so the request may take longer than the timeout of the client; without
+// one, the client's own timeout applies. The caller must call the returned cancel function.
+func withTimeout(ctx context.Context, hc *http.Client, timeout time.Duration) (context.Context, *http.Client, context.CancelFunc) {
+	if timeout <= 0 {
+		return ctx, hc, func() {}
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	own := *hc
+	own.Timeout = 0
+	return ctx, &own, cancel
 }
 
 // finish handles a 2xx response: it turns a failure reported inside the body into an error.

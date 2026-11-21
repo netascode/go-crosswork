@@ -215,3 +215,100 @@ func TestWaitForMopJob(t *testing.T) {
 	require.ErrorAs(t, err, &we)
 	assert.Contains(t, err.Error(), "no job id")
 }
+
+const authChangePath = "/crosswork/authconfig/v1/remote/tacacs"
+
+func TestClientDo_AuthenticationChangeIgnoresTheWriteLock(t *testing.T) {
+	shortAuthChangeWait(t)
+	f := newFake(t)
+	f.api = func(w http.ResponseWriter, r *http.Request, _ int) { w.WriteHeader(http.StatusNoContent) }
+	c := f.client(t)
+	c.s.writeMu.Lock()
+	defer c.s.writeMu.Unlock()
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Put(authChangePath, `{}`, UseMutex)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		require.NoError(t, err, "the write takes its own lock, not the one that is held")
+	case <-time.After(3 * time.Second):
+		t.Fatal("a write that restarts the authentication service waited for the client's write lock")
+	}
+}
+
+func TestClientDo_OtherWritesStillTakeTheWriteLock(t *testing.T) {
+	f := newFake(t)
+	f.api = func(w http.ResponseWriter, r *http.Request, _ int) { w.WriteHeader(http.StatusNoContent) }
+	c := f.client(t)
+	c.s.writeMu.Lock()
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Put("/crosswork/aaa/v1/sessionconfig", `{}`, UseMutex)
+		done <- err
+	}()
+	select {
+	case <-done:
+		t.Fatal("the write did not wait for the lock")
+	case <-time.After(150 * time.Millisecond):
+	}
+	c.s.writeMu.Unlock()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("the write did not go on after the lock was released")
+	}
+}
+
+func TestClientDo_AuthenticationChangesAreWrittenOneAtATime(t *testing.T) {
+	shortAuthChangeWait(t)
+	f := newFake(t)
+	var inflight, peak int32
+	f.api = func(w http.ResponseWriter, r *http.Request, _ int) {
+		cur := atomic.AddInt32(&inflight, 1)
+		for p := atomic.LoadInt32(&peak); cur > p && !atomic.CompareAndSwapInt32(&peak, p, cur); p = atomic.LoadInt32(&peak) {
+		}
+		time.Sleep(40 * time.Millisecond)
+		atomic.AddInt32(&inflight, -1)
+		w.WriteHeader(http.StatusNoContent)
+	}
+	c := f.client(t)
+	_, _ = c.Get(apiPath) // log in first
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := c.Put(authChangePath, `{}`, UseMutex)
+			assert.NoError(t, err)
+		}()
+	}
+	wg.Wait()
+	assert.EqualValues(t, 1, atomic.LoadInt32(&peak), "the writes to the authentication servers and SSO never overlap")
+}
+
+func TestClientDo_AuthenticationWaitDoesNotHoldUpOtherWrites(t *testing.T) {
+	shortAuthChangeWait(t)
+	authChangeWait.settle = 600 * time.Millisecond // the wait outlasts the second write
+	f := newFake(t)
+	f.api = func(w http.ResponseWriter, r *http.Request, _ int) { w.WriteHeader(http.StatusNoContent) }
+	c := f.client(t)
+	waiting := make(chan error, 1)
+	go func() {
+		_, err := c.Put(authChangePath, `{}`, UseMutex)
+		waiting <- err
+	}()
+	require.Eventually(t, func() bool { return f.callCount(authChangePath) == 1 }, 3*time.Second, 5*time.Millisecond)
+	start := time.Now()
+	_, err := c.Put("/crosswork/aaa/v1/passwordPolicyConfig", `{}`, UseMutex)
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), 300*time.Millisecond, "another write does not wait for the restart")
+	select {
+	case <-waiting:
+		t.Fatal("the wait ended before its pause")
+	default:
+	}
+	require.NoError(t, <-waiting)
+}

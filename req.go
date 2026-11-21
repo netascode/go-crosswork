@@ -56,7 +56,8 @@ type Req struct {
 	// LogPayload indicates whether logging of payloads should be enabled.
 	LogPayload bool
 	// UseMutex indicates whether to use the client's writing mutex for this request. The mutex is held until Do
-	// returns, so it covers the plan wait (PlanPath) and AfterWrite as well as the request itself.
+	// returns, so it covers the plan wait (PlanPath) and AfterWrite as well as the request itself. A PUT to the
+	// remote authentication servers or the SSO service providers takes a lock of its own instead (see restartsLogin).
 	UseMutex bool
 	// MutexKey names a lock of its own for this request (see UseMutexKey). Requests with the same key run one at a
 	// time, requests with different keys, and requests with UseMutex, do not wait for each other.
@@ -248,8 +249,12 @@ func readOnlyPost(p string) bool {
 
 // restartsLogin reports whether a write to the path changes the remote authentication servers or the SSO
 // service providers. Crosswork restarts its authentication service for such a change, and for a while
-// every new login fails. Do waits for the login to work again before it returns, inside the lock of the
-// request, unless the request has its own AfterWrite function.
+// every new login fails or is held. A PUT to such a path is handled differently from other writes:
+//   - It takes a lock of its own, not the client's write lock that UseMutex asks for, so it holds up no other
+//     write. The writes to these paths still run one at a time.
+//   - Do lets go of that lock as soon as the write is done and then waits for logins to work again before it
+//     returns, unless the request has its own AfterWrite function. The writers of one burst share that wait.
+//   - Every login call waits out the restart (see postForm).
 func restartsLogin(p string) bool {
 	for _, prefix := range []string{
 		"/crosswork/authconfig/v1/remote/",
