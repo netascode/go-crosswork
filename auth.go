@@ -461,9 +461,10 @@ func (client *Client) sendForm(ctx context.Context, path string, form url.Values
 type loginWait struct{ settle, interval, timeout time.Duration }
 
 // authChangeWait is how the wait after a write that restarts the authentication service runs (see awaitAuthChange
-// and WaitForLogin). Crosswork says a change can take up to three minutes to apply, so the wait allows that
-// long. The window opens a few seconds after the write, so the wait starts with a pause.
-var authChangeWait = loginWait{settle: 15 * time.Second, interval: 10 * time.Second, timeout: 180 * time.Second}
+// and WaitForLogin). Crosswork says a change can take three to five minutes to apply (the restart measured on a lab
+// takes about a hundred seconds), so the wait allows five minutes. The window opens a few seconds after the write, so
+// the wait starts with a pause.
+var authChangeWait = loginWait{settle: 15 * time.Second, interval: 10 * time.Second, timeout: 300 * time.Second}
 
 // loginConfirmations is the number of requests in a row that must succeed before WaitForLogin
 // reports that Crosswork accepts logins again.
