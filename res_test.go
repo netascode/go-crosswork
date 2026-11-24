@@ -41,6 +41,9 @@ func TestResultFailure(t *testing.T) {
 		"dg_mapping_job_failed.json":      "requested dg is not the same as current one",
 		"grouping_error.json":             "DUPLICATED_DEVICE_ACCESS_GROUP_NAME",
 		"grouping_error_with_group.json":  "DEVICE_ACCESS_GROUP_USER_ASSOCIATION_FAILURE",
+		"optima_failure_range.json":       "util_threshold: Utilization Threshold must in range 0.0 to 100.0",
+		"optima_failure_enum.json":        "Invalid enum value: BOGUS",
+		"optima_failure_multiple.json":    "opt_time_event_threshold: Optimization Time Event Theshold must be in range 1 to 4,294,967,295; opt_time_limit: Optimization Time Limit",
 	}
 	for name, want := range failures {
 		t.Run("failure/"+name, func(t *testing.T) {
@@ -70,6 +73,9 @@ func TestResultFailure(t *testing.T) {
 		"devicepackage_not_found.json", // soft not-found with no error member: left to the caller
 		"yang_patch_status_ok.json",
 		"grouping_success.json", // status marker is Success
+		"optima_success.json",
+		"optima_failure_affinity_entries.json", // look-alike: "error" entries, handled by the affinity code
+		"optima_failure_affinity_string.json",  // look-alike: errors is a plain string
 	}
 	for _, name := range healthy {
 		t.Run("healthy/"+name, func(t *testing.T) {

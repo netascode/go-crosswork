@@ -1,0 +1,1 @@
+{"data":{"errors":[{"field":null,"errorDescription":"Invalid enum value: BOGUS for enum type: optima_bwod_config.BwOnDemandConfig.Objective","errorCode":null}],"status":"failure"},"attributes":{}}

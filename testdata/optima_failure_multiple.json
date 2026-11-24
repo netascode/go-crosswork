@@ -1,0 +1,1 @@
+{"data":{"errors":[{"field":"opt_time_event_threshold","errorDescription":"Optimization Time Event Theshold must be in range 1 to 4,294,967,295","errorCode":"RANGEERROR"},{"field":"opt_time_limit","errorDescription":"Optimization Time Limit must be in the range 1 to 4,294,967,295","errorCode":"RANGEERROR"}],"status":"failure"},"attributes":{}}

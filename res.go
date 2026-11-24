@@ -85,7 +85,37 @@ func resultFailure(res Res) (string, bool) {
 	if s := res.Get("status"); s.Type == gjson.String && s.String() == "Error" {
 		return firstNonEmpty(res.Get("error").String(), "status Error"), true
 	}
+
+	// Optima failure: {"data":{"status":"failure","errors":[{"field":"util_threshold","errorDescription":"...","errorCode":"RANGEERROR"}]}}.
+	// The entries must carry errorDescription: the affinity writes of the same service answer a failure with
+	// "error" entries or a plain string, and those stay with the caller.
+	if res.Get("data.status").String() == "failure" {
+		if msgs := optimaErrors(res.Get("data.errors")); len(msgs) > 0 {
+			return strings.Join(msgs, "; "), true
+		}
+	}
 	return "", false
+}
+
+// optimaErrors returns one "<field>: <errorDescription>" message per entry, or nil unless every entry has an errorDescription.
+func optimaErrors(errs gjson.Result) []string {
+	list := errs.Array()
+	if !errs.IsArray() || len(list) == 0 {
+		return nil
+	}
+	msgs := make([]string, 0, len(list))
+	for _, e := range list {
+		d := e.Get("errorDescription")
+		if !e.IsObject() || d.Type != gjson.String || strings.TrimSpace(d.String()) == "" {
+			return nil
+		}
+		if f := e.Get("field"); f.Type == gjson.String && f.String() != "" {
+			msgs = append(msgs, f.String()+": "+d.String())
+		} else {
+			msgs = append(msgs, d.String())
+		}
+	}
+	return msgs
 }
 
 // entryFailure recognises a list of per-entry results, the answer of the Workflow Manager Solutions services
