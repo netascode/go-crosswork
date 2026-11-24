@@ -38,7 +38,7 @@ func resultFailure(res Res) (string, bool) {
 		return "", false
 	}
 
-	// 1. Job object (DLM, NSO actions, Data Gateway): {"job_id":..., "state":"JOB_FAILED", "error":...}
+	// Job object (DLM, NSO actions, Data Gateway): {"job_id":..., "state":"JOB_FAILED", "error":...}
 	if res.Get("job_id").Type == gjson.String && res.Get("state").Type == gjson.String {
 		state := res.Get("state").String()
 		if state == "JOB_COMPLETED_WITH_WARNING" {
@@ -53,22 +53,22 @@ func resultFailure(res Res) (string, bool) {
 		return "", false
 	}
 
-	// 2. Request result (collection, cross-cluster, AppManager, geo, placement): {"result":{"request_result":"REJECTED",...}}
+	// Request result (collection, cross-cluster, AppManager, geo, placement): {"result":{"request_result":"REJECTED",...}}
 	if rr := res.Get("result.request_result"); rr.Type == gjson.String && rr.String() == "REJECTED" {
 		return firstNonEmpty(res.Get("result.error.error").String(), "request rejected"), true
 	}
 
-	// 3. Code and message (ZTP): {"code":400,"message":"Filter not provided"}
+	// Code and message (ZTP): {"code":400,"message":"Filter not provided"}
 	if c, m := res.Get("code"), res.Get("message"); c.Type == gjson.Number && c.Float() >= 400 && m.Type == gjson.String {
 		return m.String(), true
 	}
 
-	// 4. Fail marker (fault/alarm): {"error":"Fail","code":0,"message":"Input Request is invalid"}
+	// Fail marker (fault/alarm): {"error":"Fail","code":0,"message":"Input Request is invalid"}
 	if e, m := res.Get("error"), res.Get("message"); e.Type == gjson.String && e.String() == "Fail" && m.Type == gjson.String && m.String() != "" {
 		return m.String(), true
 	}
 
-	// 5. Lone error: the body has only `error` (non-empty string) or only `errors` (non-empty list of strings).
+	// Lone error: the body has only `error` (non-empty string) or only `errors` (non-empty list of strings).
 	keys := 0
 	res.ForEach(func(_, _ gjson.Result) bool { keys++; return true })
 	if keys == 1 {
@@ -80,7 +80,7 @@ func resultFailure(res Res) (string, bool) {
 		}
 	}
 
-	// 6. Status marker (grouping): {"status":"Error","error":"DUPLICATED_DEVICE_ACCESS_GROUP_NAME"}; the body can carry
+	// Status marker (grouping): {"status":"Error","error":"DUPLICATED_DEVICE_ACCESS_GROUP_NAME"}; the body can carry
 	// the object next to it, so the rule looks at the marker, not at the number of members.
 	if s := res.Get("status"); s.Type == gjson.String && s.String() == "Error" {
 		return firstNonEmpty(res.Get("error").String(), "status Error"), true
@@ -155,7 +155,7 @@ func entryStatuses(res Res) []int {
 	return codes
 }
 
-// statusErrorCode returns the structured error code of a status-marker failure (rule 6),
+// statusErrorCode returns the structured error code of a status-marker failure,
 // such as GROUP_NOT_EXIST, and "" for any other body.
 func statusErrorCode(res Res) string {
 	if s := res.Get("status"); s.Type == gjson.String && s.String() == "Error" {
