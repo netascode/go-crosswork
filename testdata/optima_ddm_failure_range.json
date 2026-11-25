@@ -1,0 +1,1 @@
+{"configs":{"computeCadence":15,"debug":false,"minDemandTraffic":0.0,"maxPlanFiles":1},"message":"Compute cadence must be at least 15 minutes.","status":"failure"}

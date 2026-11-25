@@ -29,21 +29,26 @@ func TestStatusErrorCode(t *testing.T) {
 
 func TestResultFailure(t *testing.T) {
 	failures := map[string]string{
-		"dlm_job_failed.json":             "already exists",
-		"dlm_job_failed_code.json":        "does not exist",
-		"dlm_job_failed_errors_list.json": "Invalid credential list",
-		"dlm_job_partial.json":            "one device could not be deleted",
-		"collection_rejected.json":        "filter must not be empty",
-		"ztp_code_message.json":           "Filter not provided",
-		"fault_fail.json":                 "Input Request is invalid",
-		"lone_error.json":                 "Geo Mode is not enabled",
-		"lone_errors.json":                "criteria cannot be empty",
-		"dg_mapping_job_failed.json":      "requested dg is not the same as current one",
-		"grouping_error.json":             "DUPLICATED_DEVICE_ACCESS_GROUP_NAME",
-		"grouping_error_with_group.json":  "DEVICE_ACCESS_GROUP_USER_ASSOCIATION_FAILURE",
-		"optima_failure_range.json":       "util_threshold: Utilization Threshold must in range 0.0 to 100.0",
-		"optima_failure_enum.json":        "Invalid enum value: BOGUS",
-		"optima_failure_multiple.json":    "opt_time_event_threshold: Optimization Time Event Theshold must be in range 1 to 4,294,967,295; opt_time_limit: Optimization Time Limit",
+		"dlm_job_failed.json":                "already exists",
+		"dlm_job_failed_code.json":           "does not exist",
+		"dlm_job_failed_errors_list.json":    "Invalid credential list",
+		"dlm_job_partial.json":               "one device could not be deleted",
+		"collection_rejected.json":           "filter must not be empty",
+		"ztp_code_message.json":              "Filter not provided",
+		"fault_fail.json":                    "Input Request is invalid",
+		"lone_error.json":                    "Geo Mode is not enabled",
+		"lone_errors.json":                   "criteria cannot be empty",
+		"dg_mapping_job_failed.json":         "requested dg is not the same as current one",
+		"grouping_error.json":                "DUPLICATED_DEVICE_ACCESS_GROUP_NAME",
+		"grouping_error_with_group.json":     "DEVICE_ACCESS_GROUP_USER_ASSOCIATION_FAILURE",
+		"optima_failure_range.json":          "util_threshold: Utilization Threshold must in range 0.0 to 100.0",
+		"optima_failure_enum.json":           "Invalid enum value: BOGUS",
+		"optima_failure_multiple.json":       "opt_time_event_threshold: Optimization Time Event Theshold must be in range 1 to 4,294,967,295; opt_time_limit: Optimization Time Limit",
+		"optima_ddm_failure_range.json":      "Compute cadence must be at least 15 minutes.",
+		"optima_ddm_failure_cast.json":       "cannot be cast to class java.lang.Integer",
+		"optima_ddm_failure_rejected.json":   "ret: REJECTED",
+		"optima_lcm_failure_rows.json":       "REJECTED: Interface GigabitEthernet0/0/0/0 on node cwtest-node-1 not found; Threshold 5.0 must be greater than utilization hold margin 10.0; Threshold 5.0 outside allowable range",
+		"optima_lcm_failure_rows_empty.json": "REJECTED",
 	}
 	for name, want := range failures {
 		t.Run("failure/"+name, func(t *testing.T) {
@@ -74,6 +79,7 @@ func TestResultFailure(t *testing.T) {
 		"yang_patch_status_ok.json",
 		"grouping_success.json", // status marker is Success
 		"optima_success.json",
+		"optima_ddm_success.json",
 		"optima_failure_affinity_entries.json", // look-alike: "error" entries, handled by the affinity code
 		"optima_failure_affinity_string.json",  // look-alike: errors is a plain string
 	}

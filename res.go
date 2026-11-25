@@ -94,7 +94,30 @@ func resultFailure(res Res) (string, bool) {
 			return strings.Join(msgs, "; "), true
 		}
 	}
+
+	// Optima status failure: {"message":"Compute cadence must be at least 15 minutes.","status":"failure"}.
+	// A bulk write names the refused rows next to a generic message:
+	// {"message":"REJECTED","status":"failure","failedData":[{"rowNum":"0","errors":["..."]}]}; their texts follow the message.
+	if m := res.Get("message"); res.Get("status").String() == "failure" && m.Type == gjson.String && strings.TrimSpace(m.String()) != "" {
+		if rows := optimaFailedRows(res.Get("failedData")); len(rows) > 0 {
+			return m.String() + ": " + strings.Join(rows, "; "), true
+		}
+		return m.String(), true
+	}
 	return "", false
+}
+
+// optimaFailedRows returns the error texts of the refused rows of a bulk write, in row order, or nil when there are none.
+func optimaFailedRows(rows gjson.Result) []string {
+	var msgs []string
+	for _, row := range rows.Array() {
+		for _, e := range row.Get("errors").Array() {
+			if e.Type == gjson.String && strings.TrimSpace(e.String()) != "" {
+				msgs = append(msgs, e.String())
+			}
+		}
+	}
+	return msgs
 }
 
 // optimaErrors returns one "<field>: <errorDescription>" message per entry, or nil unless every entry has an errorDescription.

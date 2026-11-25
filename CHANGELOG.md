@@ -5,6 +5,7 @@
 - Retry logins while the authentication service of Crosswork restarts
 - Hold other requests on the client while the authentication service restarts
 - Increase the default wait for logins after a change that restarts the authentication service (`authChangeWait`) from 180 to 300 seconds
+- Add the texts of the refused rows (`failedData`) to the failure message of an Optima bulk write
 
 ## 0.1.2
 
